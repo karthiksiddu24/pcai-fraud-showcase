@@ -1,0 +1,20 @@
+# Secrets — never commit
+00-bootstrap/.env
+**/*.tgz
+**/*.kubeconfig
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Local data (TabFormer is huge)
+data/
+*.csv
+*.parquet
+!**/templates/**/*.csv
+
+# Local artifacts
+trained_models/
+*.pth
+*.pkl

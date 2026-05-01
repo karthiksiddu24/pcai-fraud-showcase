@@ -1,0 +1,81 @@
+# SparkApplication CR — TabFormer CSV → Parquet (Hive table) on the shared PVC.
+# Submitted by tabformer_curate_dag.py via SparkKubernetesOperator.
+#
+# Mirrors HPE's official tutorial pattern (Data-Engineering/Airflow/example_ezaf_*.yaml):
+#   - sparkoperator.hpe.com/v1beta2 API
+#   - Image path templated via {{ dag_run.conf["registry_url"] }}
+#   - Mounts the kubeflow-shared-pvc at /mounts/shared-volume/shared
+#
+# Same shared PVC is the user's notebook /mnt/shared, so files written here are
+# visible from notebooks (just under a different mount path).
+#
+# CPU-only variant. To enable GPU+RAPIDS, uncomment the gpu/sparkConf blocks at
+# the bottom — only do this once you've confirmed the cluster's Spark image
+# tag includes RAPIDS jars (otherwise Spark fails to start).
+
+apiVersion: "sparkoperator.hpe.com/v1beta2"
+kind: SparkApplication
+metadata:
+  name: tabformer-curate-{{ts_nodash|replace("T", "")}}
+spec:
+  type: Python
+  pythonVersion: "3"
+  sparkVersion: "3.5.5"
+  mode: cluster
+  image: '{{dag_run.conf["registry_url"]}}hpe-spark/spark:v3.5.5.2.1'
+  imagePullPolicy: Always
+  imagePullSecrets:
+    - imagepull
+
+  # PySpark script lives on the shared PVC — drop it via JupyterLab into
+  # /mnt/shared/fraud-tabformer/scripts/ once; Spark pods pick it up here.
+  mainApplicationFile: "local:///mounts/shared-volume/shared/fraud-tabformer/scripts/tabformer_csv_to_iceberg.py"
+
+  arguments:
+    - "--raw"
+    - "file:///mounts/shared-volume/shared/fraud-tabformer/raw/card_transaction.v1.csv"
+    - "--curated"
+    - "file:///mounts/shared-volume/shared/fraud-tabformer/curated/card_transactions"
+
+  restartPolicy:
+    type: Never
+
+  driver:
+    cores: 2
+    coreLimit: "2000m"
+    memory: "4g"
+    labels:
+      version: "3.5.5"
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /mounts/shared-volume/shared
+
+  executor:
+    cores: 4
+    coreLimit: "4000m"
+    instances: 2
+    memory: "8g"
+    labels:
+      version: "3.5.5"
+    volumeMounts:
+      - name: shared-volume
+        mountPath: /mounts/shared-volume/shared
+    volumes:
+      - name: shared-volume
+        persistentVolumeClaim:
+          claimName: kubeflow-shared-pvc
+
+  # ---- GPU + RAPIDS (uncomment once you've confirmed the image has RAPIDS jars) ----
+  #
+  # sparkConf:
+  #   spark.plugins: "com.nvidia.spark.SQLPlugin"
+  #   spark.rapids.sql.enabled: "true"
+  #   spark.rapids.memory.gpu.allocFraction: "0.5"
+  #   spark.task.resource.gpu.amount: "0.25"
+  #   spark.executor.resource.gpu.amount: "1"
+  #   spark.executor.resource.gpu.discoveryScript: "/opt/sparkRapidsPlugin/getGpusResources.sh"
+  #
+  # (Add to executor block:)
+  #   gpu:
+  #     name: "nvidia.com/gpu"
+  #     quantity: 1

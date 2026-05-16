@@ -18,3 +18,17 @@ data/
 trained_models/
 *.pth
 *.pkl
+
+# Upstream NVIDIA clone — re-cloneable from public source
+financial-fraud-detection/
+financial-fraud-usage-v2.ipynb
+
+# Local scratch / build outputs
+phase2_demo.zip
+phase2_demo/
+_docx_extract/
+.claude/
+
+# Vendor docs / binaries
+*.pdf
+*.docx
